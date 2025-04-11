@@ -1,0 +1,16 @@
+# Images - exclude everywhere except the ones for documentation
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.tiff
+*.webp
+!docs/img/**
+
+# Virtual environment
+/.venv
+
+# Project specific
+/cropped_images
+/input_images
