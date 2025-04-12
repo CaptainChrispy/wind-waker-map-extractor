@@ -12,8 +12,8 @@ class Config:
     valid_extensions: tuple = ('.png', '.jpg', '.jpeg')
 
     # Edge detection parameters
-    canny_threshold1: int = 50
-    canny_threshold2: int = 150
+    canny_threshold_low: int = 50
+    canny_threshold_high: int = 150
     epsilon: float = 0.02
 
     # Square detection criteria
@@ -37,6 +37,7 @@ class Config:
     debug_folder: str = "debug_output"
 
 
+# Color codes for terminal output
 GREEN = '\033[92m'
 RED = '\033[91m'
 YELLOW = '\033[93m'
@@ -55,6 +56,7 @@ def find_square_template(gray_image: np.ndarray, config: Config) -> tuple:
     Returns:
         tuple: (x, y, w, h) if square found, None otherwise
     """
+    # Load the template image that represents what we're looking for
     template = cv2.imread(config.template_path)
     if template is None:
         print(f"{RED}Warning: Could not load template from {config.template_path}{RESET}")
@@ -62,8 +64,8 @@ def find_square_template(gray_image: np.ndarray, config: Config) -> tuple:
     
     gray_template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
     
-    image_edges = cv2.Canny(gray_image, config.canny_threshold1, config.canny_threshold2)
-    template_edges = cv2.Canny(gray_template, config.canny_threshold1, config.canny_threshold2)
+    image_edges = cv2.Canny(gray_image, config.canny_threshold_low, config.canny_threshold_high)
+    template_edges = cv2.Canny(gray_template, config.canny_threshold_low, config.canny_threshold_high)
     
     result = cv2.matchTemplate(image_edges, template_edges, cv2.TM_CCOEFF_NORMED)
     _, max_val, _, max_loc = cv2.minMaxLoc(result)
@@ -87,16 +89,17 @@ def find_square_contours(gray_image: np.ndarray, config: Config) -> tuple:
     Returns:
         tuple: (x, y, w, h) if square found, None otherwise
     """
-    edges = cv2.Canny(gray_image, config.canny_threshold1, config.canny_threshold2)
-    contours, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    edges = cv2.Canny(gray_image, config.canny_threshold_low, config.canny_threshold_high)
+    contours, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE) # Find contours from edges
 
     best_square = None
     for cnt in contours:
-        approx = cv2.approxPolyDP(cnt, 0.02 * cv2.arcLength(cnt, True), True)
+        approx = cv2.approxPolyDP(cnt, config.epsilon * cv2.arcLength(cnt, True), True)
         if len(approx) == 4:
             x, y, w, h = cv2.boundingRect(approx)
             aspect_ratio = w / float(h)
 
+            # Check for square shape
             if config.aspect_ratio_min < aspect_ratio < config.aspect_ratio_max and \
                config.width_min < w < config.width_max and \
                config.height_min < h < config.height_max:
@@ -123,7 +126,7 @@ def crop_dotted_square(image_path: str, output_path: str, config: Config = Confi
     """
     image = cv2.imread(image_path)
     gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    best_square = find_square_contours(gray_image, config)
+    best_square = find_square_contours(gray_image, config) # Represents the detected square
 
     if not best_square:
         print(f"{YELLOW}No suitable square found in {image_path}{RESET}")
@@ -136,14 +139,14 @@ def crop_dotted_square(image_path: str, output_path: str, config: Config = Confi
             print(f"{RED}Template matching failed. No square found.{RESET}")
 
             if config.debug:
-                edges = cv2.Canny(gray_image, config.canny_threshold1, config.canny_threshold2)
+                edges = cv2.Canny(gray_image, config.canny_threshold_low, config.canny_threshold_high)
                 contours, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
                 save_debug_images(image_path, image, gray_image, edges, contours, config)
 
             return
 
     x, y, w, h = best_square
-    padding = config.border_padding
+    padding = config.border_padding # Slight cropping to remove border
     cropped = image[y + padding:y + h - padding, x + padding:x + w - padding]
     cv2.imwrite(output_path, cropped)
     print(f'{GREEN}Cropped and saved to {output_path}{RESET}')

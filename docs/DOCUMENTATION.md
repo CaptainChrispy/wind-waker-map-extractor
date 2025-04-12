@@ -9,10 +9,11 @@ I developed this script to extract assets from Wind Waker HD screenshots for the
 - [Complete Processing Pipeline](#complete-processing-pipeline)
 - [1. Image Loading and Preprocessing](#1-image-loading-and-preprocessing)
 - [2. Edge Detection](#2-edge-detection)
-- [3. Contour Detection](#3-contour-detection)
+- [3. Primary Method: Contour Detection](#3-primary-method-contour-detection)
 - [4. Finding the Most Square-Like Polygon](#4-finding-the-most-square-like-polygon)
 - [5. Filtering by Shape and Size](#5-filtering-by-shape-and-size)
-- [6. Cropping and Saving the Image](#6-cropping-and-saving-the-image)
+- [6. Backup Method: Template Matching](#6-backup-method-template-matching)
+- [7. Cropping and Saving the Image](#7-cropping-and-saving-the-image)
 
 ## Complete Processing Pipeline
 
@@ -34,14 +35,14 @@ When loading the image, I convert it to grayscale using OpenCV's [cvtColor trans
 
 ## 2. Edge Detection
 ```python
-edges = cv2.Canny(gray, 50, 150) # Apply edge detection to find dotted border
+edges = cv2.Canny(gray_image, config.canny_threshold_low, config.canny_threshold_high)
 ```
 
 ![Edge Detection](img/screenshot_edges.jpg)
 
 Next, I apply [Canny edge detection](https://docs.opencv.org/4.x/da/d22/tutorial_py_canny.html), a multi-stage algorithm for detecting edges in images. It essentially works by taking the grayscale image and identifying areas with sharp transitions in pixel brightness, which correspond to edges.
 
-The two threshold values control the sensitivity - the lower threshold (50) connects edges, while the upper threshold (150) identifies strong edges. This combination helps detect the dotted border while rejecting noise.
+The two threshold values control the sensitivity. Any edge above the higher threshold is considered a strong edge, while edges below the lower threshold are suppressed. Edges between these thresholds are kept only if they are connected to strong edges.
 
 ## 3. Contour Detection
 ```python
@@ -61,11 +62,9 @@ The Wind Waker HD's dotted border around the island forms a relatively clean con
 
 ## 4. Finding the Most Square-Like Polygon
 ```python
-# Look for the most square-like, medium-sized polygon
 best_square = None
-
 for cnt in contours:
-    approx = cv2.approxPolyDP(cnt, 0.02 * cv2.arcLength(cnt, True), True)
+    approx = cv2.approxPolyDP(cnt, config.epsilon * cv2.arcLength(cnt, True), True)
     if len(approx) == 4:
         x, y, w, h = cv2.boundingRect(approx)
         aspect_ratio = w / float(h)
@@ -73,17 +72,18 @@ for cnt in contours:
 
 ![Potential Squares](img/screenshot_potential_squares.jpg)
 
-To identify our target, I use the [Douglas-Peucker algorithm](https://docs.opencv.org/4.x/dd/d49/tutorial_py_contour_features.html) (implemented via `cv2.approxPolyDP`), which simplifies contours by reducing the number of points while preserving the essential shape. The epsilon parameter (`0.02 * cv2.arcLength(cnt, True)`) controls the approximation accuracy - smaller values result in more detailed approximations.
+To identify our target, I use the [Douglas-Peucker algorithm](https://docs.opencv.org/4.x/dd/d49/tutorial_py_contour_features.html) (implemented via `cv2.approxPolyDP`), which simplifies contours by reducing the number of points while preserving the essential shape. The epsilon parameter (`config.epsilon * cv2.arcLength(cnt, True)`) controls the approximation accuracy - smaller values result in more detailed approximations.
 
 ## 5. Filtering by Shape and Size
 ```python
-# Check for square shape with reasonable size
-if 0.9 < aspect_ratio < 1.1 and 300 < w < 330 and 300 < h < 330:
-    if w == 319:
-        best_square = (x, y, w, h)
-        break  # Found exact match, no need to continue
-    # Otherwise keep the closest match to 319 pixels
-    elif best_square is None or abs(w - 319) < abs(best_square[2] - 319):
+# Check for square shape
+if config.aspect_ratio_min < aspect_ratio < config.aspect_ratio_max and \
+    config.width_min < w < config.width_max and \
+    config.height_min < h < config.height_max:
+    
+    if w == config.target_width:
+        return (x, y, w, h)
+    elif best_square is None or abs(w - config.target_width) < abs(best_square[2] - config.target_width):
         best_square = (x, y, w, h)
 ```
 
@@ -91,23 +91,53 @@ if 0.9 < aspect_ratio < 1.1 and 300 < w < 330 and 300 < h < 330:
 
 This heuristic approach combines three criteria to identify our target square:
 
-1. **Aspect ratio filtering** (0.9 < w/h < 1.1): Ensures the shape is approximately square, allowing for a 10% deviation from perfect 1:1 ratio to accommodate imperfect contour detection.
+1. **Aspect ratio filtering**: Ensures the shape is approximately square, allowing for a 10% deviation from perfect 1:1 ratio to accommodate imperfect contour detection.
 
-2. **Size constraints** (300-330 pixels): These values were determined by analyzing multiple Wind Waker HD screenshots. The consistency of the UI elements across the game makes this range reliable.
+2. **Size constraints**: These values were determined by analyzing multiple Wind Waker HD screenshots. The consistency of the UI elements across the game makes this range reliable.
 
 3. **Target width matching**: When multiple candidates meet the criteria, we prioritize the contour with a width closest to 319 pixels, which is the exact size observed in most 1920 x 1080 pixel screenshots. If we find an exact match with width = 319, we immediately select it and stop searching.
 
 This multi-criteria approach creates a robust detection system that can handle variations in screenshots while maintaining precision.
 
-## 6. Cropping and Saving the Image
+## 6. Backup Method: Template Matching
 ```python
-if best_square:
-    x, y, w, h = best_square
-    # Slight cropping to remove border
-    padding = 5
-    cropped = image[y + padding:y + h - padding, x + padding:x + w - padding]
-    cv2.imwrite(output_path, cropped)
-    print(f'Cropped and saved to {output_path}')
+template = cv2.imread(config.template_path)
+if template is None:
+    print(f"{RED}Warning: Could not load template from {config.template_path}{RESET}")
+    return None
+
+gray_template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+
+image_edges = cv2.Canny(gray_image, config.canny_threshold1, config.canny_threshold2)
+template_edges = cv2.Canny(gray_template, config.canny_threshold1, config.canny_threshold2)
+
+result = cv2.matchTemplate(image_edges, template_edges, cv2.TM_CCOEFF_NORMED)
+_, max_val, _, max_loc = cv2.minMaxLoc(result)
+
+if max_val < config.match_threshold:
+    return None
+
+x, y = max_loc
+h, w = template.shape[:2]
+return (x, y, w, h)
+```
+
+When the primary contour detection method fails, the script falls back to [template matching](https://docs.opencv.org/4.x/d4/dc6/tutorial_py_template_matching.html). This approach:
+
+1. Uses a reference image (`ref.png`) of a clean dotted square
+2. Applies edge detection to both the template and source image
+3. Uses normalized cross-correlation to find the best match
+4. Returns coordinates if the match quality exceeds a threshold
+
+Template matching is useful for our case as the dotted square's outline and shade are consistent across screenshots, making it a reliable backup method, even if it means having a lower threshold for detection.
+
+## 7. Cropping and Saving the Image
+```python
+x, y, w, h = best_square
+padding = config.border_padding
+cropped = image[y + padding:y + h - padding, x + padding:x + w - padding]
+cv2.imwrite(output_path, cropped)
+print(f'{GREEN}Cropped and saved to {output_path}{RESET}')
 ```
 
 ![Final Cropped Image](img/screenshot_cropped.jpg)

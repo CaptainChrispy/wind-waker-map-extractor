@@ -10,7 +10,9 @@ This tool leverages OpenCV to detect and extract the dotted square minimaps from
 
 ## Key Features
 
-- Automatic detection of dotted-border map squares using edge detection and contour analysis
+- Automatic detection of dotted-border map squares using:
+  - Edge detection and contour analysis
+  - Template matching
 - Batch processing for multiple screenshots 
 - Clean cropping and edge removal with automatic padding
 
@@ -29,7 +31,7 @@ This tool leverages OpenCV to detect and extract the dotted square minimaps from
    pip install opencv-python
    ```
 2. **Processing Images**
-   - Place your Wind Waker HD map screenshots in the `input_images` folder   git push --set-upstream origin master
+   - Place your Wind Waker HD map screenshots in the `input_images` folder
    - Ensure all screenshots are 1920 x 1080 pixels in resolution (the tool is built for this size)
    - Run the script with `python main.py`
    - Find the processed images in the `cropped_images` folder
@@ -38,4 +40,4 @@ This tool leverages OpenCV to detect and extract the dotted square minimaps from
 
 This tool uses computer vision techniques to identify and extract the dotted square minimaps from screenshots. The process automatically detects square borders and crops them to a consistent size.
 
-For a detailed technical breakdown with visual examples of the 6-step pipeline, see the [technical documentation](docs/DOCUMENTATION.md).
+For a detailed technical breakdown with visual examples of the pipeline, see the [technical documentation](docs/DOCUMENTATION.md).
