@@ -14,3 +14,4 @@
 # Project specific
 /cropped_images
 /input_images
+/debug_output
