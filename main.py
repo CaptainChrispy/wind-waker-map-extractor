@@ -44,12 +44,12 @@ BLUE = '\033[94m'
 RESET = '\033[0m'
 
 
-def find_square_template(image: np.ndarray, config: Config) -> tuple:
+def find_square_template(gray_image: np.ndarray, config: Config) -> tuple:
     """
     Backup method using template matching to find the square.
     
     Args:
-        image: Input image
+        gray_image: Grayscale input image
         config: Configuration object
     
     Returns:
@@ -59,8 +59,13 @@ def find_square_template(image: np.ndarray, config: Config) -> tuple:
     if template is None:
         print(f"{RED}Warning: Could not load template from {config.template_path}{RESET}")
         return None
-        
-    result = cv2.matchTemplate(image, template, cv2.TM_CCOEFF_NORMED)
+    
+    gray_template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+    
+    image_edges = cv2.Canny(gray_image, config.canny_threshold1, config.canny_threshold2)
+    template_edges = cv2.Canny(gray_template, config.canny_threshold1, config.canny_threshold2)
+    
+    result = cv2.matchTemplate(image_edges, template_edges, cv2.TM_CCOEFF_NORMED)
     _, max_val, _, max_loc = cv2.minMaxLoc(result)
 
     if max_val < config.match_threshold:
@@ -71,19 +76,18 @@ def find_square_template(image: np.ndarray, config: Config) -> tuple:
     return (x, y, w, h)
 
 
-def find_square_contours(image: np.ndarray, config: Config) -> tuple:
+def find_square_contours(gray_image: np.ndarray, config: Config) -> tuple:
     """
     Tries to find the square using contour detection method.
     
     Args:
-        image: Input image
+        gray_image: Grayscale input image
         config: Configuration object
     
     Returns:
         tuple: (x, y, w, h) if square found, None otherwise
     """
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    edges = cv2.Canny(gray, config.canny_threshold1, config.canny_threshold2)
+    edges = cv2.Canny(gray_image, config.canny_threshold1, config.canny_threshold2)
     contours, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
     best_square = None
@@ -118,23 +122,23 @@ def crop_dotted_square(image_path: str, output_path: str, config: Config = Confi
         None
     """
     image = cv2.imread(image_path)
-    best_square = find_square_contours(image, config)
+    gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    best_square = find_square_contours(gray_image, config)
 
     if not best_square:
         print(f"{YELLOW}No suitable square found in {image_path}{RESET}")
         print(f"{BLUE}Primary detection failed, trying template matching...{RESET}")
 
-        best_square = find_square_template(image, config)
+        best_square = find_square_template(gray_image, config)
         if best_square:
             print(f"{GREEN}Template matching succeeded!{RESET}")
         else:
             print(f"{RED}Template matching failed. No square found.{RESET}")
 
             if config.debug:
-                gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-                edges = cv2.Canny(gray, config.canny_threshold1, config.canny_threshold2)
+                edges = cv2.Canny(gray_image, config.canny_threshold1, config.canny_threshold2)
                 contours, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-                save_debug_images(image_path, image, gray, edges, contours, config)
+                save_debug_images(image_path, image, gray_image, edges, contours, config)
 
             return
 
