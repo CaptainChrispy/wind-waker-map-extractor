@@ -5,14 +5,17 @@ from dataclasses import dataclass
 @dataclass
 class Config:
     """Configuration settings for cropping dotted square minimap images"""
+    # File system settings
     input_folder: str = "input_images"
     output_folder: str = "cropped_images"
+    valid_extensions: tuple = ('.png', '.jpg', '.jpeg')
 
+    # Edge detection parameters
     canny_threshold1: int = 50
     canny_threshold2: int = 150
-
     epsilon: float = 0.02
 
+    # Square detection criteria
     aspect_ratio_min: float = 0.9
     aspect_ratio_max: float = 1.1
     width_min: int = 300
@@ -21,12 +24,11 @@ class Config:
     height_max: int = 330
     target_width: int = 319
 
+    # Output image settings
     border_padding: int = 5
 
-    valid_extensions = ('.png', '.jpg', '.jpeg')
 
-
-def crop_dotted_square(image_path, output_path, config=Config()):
+def crop_dotted_square(image_path: str, output_path: str, config: Config = Config()) -> None:
     """
     Crops the dotted square minimap from the image and saves it to the output path.
 
@@ -74,7 +76,7 @@ def crop_dotted_square(image_path, output_path, config=Config()):
         print(f"No suitable square found in {image_path}")
 
 
-def batch_crop_dotted_squares(input_folder, output_folder, config=Config()):
+def batch_crop_dotted_squares(input_folder: str, output_folder: str, config: Config = Config()) -> None:
     """
     Batch processes images in the input folder to crop dotted squares and save them to the output folder.
 
@@ -94,10 +96,10 @@ def batch_crop_dotted_squares(input_folder, output_folder, config=Config()):
 
 
 def main():
+    """Main entry point for the script."""
     config = Config()
-    input_folder = config.input_folder
-    output_folder = config.output_folder
-    batch_crop_dotted_squares(input_folder, output_folder, config)
+    batch_crop_dotted_squares(config.input_folder, config.output_folder, config)
+
 
 if __name__ == "__main__":
     main()
