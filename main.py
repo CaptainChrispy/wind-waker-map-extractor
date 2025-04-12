@@ -27,7 +27,7 @@ class Config:
 
     # Template matching settings
     template_path: str = "ref.png"
-    match_threshold: float = 0.3
+    match_threshold: float = 0.23
 
     # Output image settings
     border_padding: int = 5
