@@ -22,19 +22,20 @@ def crop_dotted_square(image_path, output_path):
 
     # Look for the most square-like, medium-sized polygon
     best_square = None
-    best_area = 0
 
     for cnt in contours:
         approx = cv2.approxPolyDP(cnt, 0.02 * cv2.arcLength(cnt, True), True)
         if len(approx) == 4:
             x, y, w, h = cv2.boundingRect(approx)
             aspect_ratio = w / float(h)
-            area = w * h
 
-            # Check for square shape and that its within expected area range
+            # Check for square shape with reasonable size
             if 0.9 < aspect_ratio < 1.1 and 300 < w < 330 and 300 < h < 330:
-                if area > best_area:
-                    best_area = area
+                if w == 319:
+                    best_square = (x, y, w, h)
+                    break  # Found exact match, no need to continue
+                # Otherwise keep the closest match to 319 pixels
+                elif best_square is None or abs(w - 319) < abs(best_square[2] - 319):
                     best_square = (x, y, w, h)
 
     if best_square:
@@ -46,6 +47,7 @@ def crop_dotted_square(image_path, output_path):
         print(f'Cropped and saved to {output_path}')
     else:
         print(f"No suitable square found in {image_path}")
+
 
 def batch_crop_dotted_squares(input_folder, output_folder):
     """
