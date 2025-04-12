@@ -55,12 +55,47 @@ def find_square_template(image: np.ndarray, config: Config) -> tuple:
         
     result = cv2.matchTemplate(image, template, cv2.TM_CCOEFF_NORMED)
     _, max_val, _, max_loc = cv2.minMaxLoc(result)
+
+    if max_val < config.match_threshold:
+        return None
+
+    x, y = max_loc
+    h, w = template.shape[:2]
+    return (x, y, w, h)
+
+
+def find_square_contours(image: np.ndarray, config: Config) -> tuple:
+    """
+    Tries to find the square using contour detection method.
     
-    if max_val >= config.match_threshold:
-        x, y = max_loc
-        h, w = template.shape[:2]
-        return (x, y, w, h)
-    return None
+    Args:
+        image: Input image
+        config: Configuration object
+    
+    Returns:
+        tuple: (x, y, w, h) if square found, None otherwise
+    """
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    edges = cv2.Canny(gray, config.canny_threshold1, config.canny_threshold2)
+    contours, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+    best_square = None
+    for cnt in contours:
+        approx = cv2.approxPolyDP(cnt, 0.02 * cv2.arcLength(cnt, True), True)
+        if len(approx) == 4:
+            x, y, w, h = cv2.boundingRect(approx)
+            aspect_ratio = w / float(h)
+
+            if config.aspect_ratio_min < aspect_ratio < config.aspect_ratio_max and \
+               config.width_min < w < config.width_max and \
+               config.height_min < h < config.height_max:
+                
+                if w == config.target_width:
+                    return (x, y, w, h)
+                elif best_square is None or abs(w - config.target_width) < abs(best_square[2] - config.target_width):
+                    best_square = (x, y, w, h)
+        
+    return best_square
 
 
 def crop_dotted_square(image_path: str, output_path: str, config: Config = Config()) -> None:
@@ -70,52 +105,37 @@ def crop_dotted_square(image_path: str, output_path: str, config: Config = Confi
     Args: 
         image_path: Path to the input image
         output_path: Path to save the cropped image
+        config: Configuration object
 
     Returns:
         None
     """
     image = cv2.imread(image_path)
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) # Convert to grayscale for easier processing
-    edges = cv2.Canny(gray, config.canny_threshold1, config.canny_threshold2)
-    contours, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    best_square = find_square_contours(image, config)
 
-    # Look for the most square-like, medium-sized polygon
-    best_square = None
-
-    for cnt in contours:
-        approx = cv2.approxPolyDP(cnt, 0.02 * cv2.arcLength(cnt, True), True)
-        if len(approx) == 4:
-            x, y, w, h = cv2.boundingRect(approx)
-            aspect_ratio = w / float(h)
-
-            # Check for square shape with reasonable size
-            if config.aspect_ratio_min < aspect_ratio < config.aspect_ratio_max and config.width_min < w < config.width_max and config.height_min < h < config.height_max:
-                if w == config.target_width:
-                    best_square = (x, y, w, h)
-                    break  # Found exact match, no need to continue
-                # Otherwise keep the closest match to 319 pixels
-                elif best_square is None or abs(w - config.target_width) < abs(best_square[2] - config.target_width):
-                    best_square = (x, y, w, h)
-
-    if best_square:
-        x, y, w, h = best_square
-        # Slight cropping to remove border
-        padding = config.border_padding
-        cropped = image[y + padding:y + h - padding, x + padding:x + w - padding]
-        cv2.imwrite(output_path, cropped)
-        print(f'Cropped and saved to {output_path}')
-    else:
+    if not best_square:
         print(f"No suitable square found in {image_path}")
         print("Primary detection failed, trying template matching...")
-        if config.debug:
-            save_debug_images(image_path, image, gray, edges, contours, config)
 
         best_square = find_square_template(image, config)
         if best_square:
             print("Template matching succeeded!")
         else:
             print("Template matching failed. No square found.")
+
+            if config.debug:
+                gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+                edges = cv2.Canny(gray, config.canny_threshold1, config.canny_threshold2)
+                contours, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+                save_debug_images(image_path, image, gray, edges, contours, config)
+
             return
+
+    x, y, w, h = best_square
+    padding = config.border_padding
+    cropped = image[y + padding:y + h - padding, x + padding:x + w - padding]
+    cv2.imwrite(output_path, cropped)
+    print(f'Cropped and saved to {output_path}')
 
 
 def save_debug_images(image_path: str, image: np.ndarray, gray: np.ndarray, edges: np.ndarray, contours: list, config: Config) -> None:
