@@ -37,6 +37,13 @@ class Config:
     debug_folder: str = "debug_output"
 
 
+GREEN = '\033[92m'
+RED = '\033[91m'
+YELLOW = '\033[93m'
+BLUE = '\033[94m'
+RESET = '\033[0m'
+
+
 def find_square_template(image: np.ndarray, config: Config) -> tuple:
     """
     Backup method using template matching to find the square.
@@ -50,7 +57,7 @@ def find_square_template(image: np.ndarray, config: Config) -> tuple:
     """
     template = cv2.imread(config.template_path)
     if template is None:
-        print(f"Warning: Could not load template from {config.template_path}")
+        print(f"{RED}Warning: Could not load template from {config.template_path}{RESET}")
         return None
         
     result = cv2.matchTemplate(image, template, cv2.TM_CCOEFF_NORMED)
@@ -114,14 +121,14 @@ def crop_dotted_square(image_path: str, output_path: str, config: Config = Confi
     best_square = find_square_contours(image, config)
 
     if not best_square:
-        print(f"No suitable square found in {image_path}")
-        print("Primary detection failed, trying template matching...")
+        print(f"{YELLOW}No suitable square found in {image_path}{RESET}")
+        print(f"{BLUE}Primary detection failed, trying template matching...{RESET}")
 
         best_square = find_square_template(image, config)
         if best_square:
-            print("Template matching succeeded!")
+            print(f"{GREEN}Template matching succeeded!{RESET}")
         else:
-            print("Template matching failed. No square found.")
+            print(f"{RED}Template matching failed. No square found.{RESET}")
 
             if config.debug:
                 gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -135,7 +142,7 @@ def crop_dotted_square(image_path: str, output_path: str, config: Config = Confi
     padding = config.border_padding
     cropped = image[y + padding:y + h - padding, x + padding:x + w - padding]
     cv2.imwrite(output_path, cropped)
-    print(f'Cropped and saved to {output_path}')
+    print(f'{GREEN}Cropped and saved to {output_path}{RESET}')
 
 
 def save_debug_images(image_path: str, image: np.ndarray, gray: np.ndarray, edges: np.ndarray, contours: list, config: Config) -> None:
