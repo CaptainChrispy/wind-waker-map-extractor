@@ -1,6 +1,7 @@
 import cv2
 import os
 from dataclasses import dataclass
+import numpy as np
 
 @dataclass
 class Config:
@@ -18,14 +19,18 @@ class Config:
     # Square detection criteria
     aspect_ratio_min: float = 0.9
     aspect_ratio_max: float = 1.1
-    width_min: int = 300
+    width_min: int = 310
     width_max: int = 330
-    height_min: int = 300
+    height_min: int = 310
     height_max: int = 330
     target_width: int = 319
 
     # Output image settings
     border_padding: int = 5
+
+    # Debug settings
+    debug: bool = False
+    debug_folder: str = "debug_output"
 
 
 def crop_dotted_square(image_path: str, output_path: str, config: Config = Config()) -> None:
@@ -41,10 +46,7 @@ def crop_dotted_square(image_path: str, output_path: str, config: Config = Confi
     """
     image = cv2.imread(image_path)
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) # Convert to grayscale for easier processing
-
-    edges = cv2.Canny(gray, config.canny_threshold1, config.canny_threshold2) # Apply edge detection to find dotted border
-
-    # Find contours from edges
+    edges = cv2.Canny(gray, config.canny_threshold1, config.canny_threshold2)
     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     # Look for the most square-like, medium-sized polygon
@@ -74,6 +76,40 @@ def crop_dotted_square(image_path: str, output_path: str, config: Config = Confi
         print(f'Cropped and saved to {output_path}')
     else:
         print(f"No suitable square found in {image_path}")
+        if config.debug:
+            save_debug_images(image_path, image, gray, edges, contours, config)
+
+
+def save_debug_images(image_path: str, image: np.ndarray, gray: np.ndarray, edges: np.ndarray, contours: list, config: Config) -> None:
+    """
+    Saves debug images when detection fails. Combines edge detection and contour visualization side by side.
+    
+    Args:
+        image_path: Path to original image for filename extraction
+        image: Original image
+        gray: Grayscale image
+        edges: Edge detection result
+        contours: Detected contours
+        config: Configuration object
+    """
+    filename = os.path.basename(image_path)
+    debug_dir = config.debug_folder
+    os.makedirs(debug_dir, exist_ok=True)
+
+    debug_image = image.copy()
+    cv2.drawContours(debug_image, contours, -1, (0, 255, 0), 2)
+    
+    edges_bgr = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
+    
+    combined = np.hstack((edges_bgr, debug_image))
+    
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    cv2.putText(combined, "Edge Detection", (10, 30), font, 1, (0, 0, 0), 8)  # Black outline
+    cv2.putText(combined, "Edge Detection", (10, 30), font, 1, (0, 255, 255), 2)  # Yellow text
+    cv2.putText(combined, "Contour Detection", (image.shape[1] + 10, 30), font, 1, (0, 0, 0), 8)  # Black outline
+    cv2.putText(combined, "Contour Detection", (image.shape[1] + 10, 30), font, 1, (0, 255, 255), 2)  # Yellow text
+    
+    cv2.imwrite(os.path.join(debug_dir, f"debug_{filename}"), combined)
 
 
 def batch_crop_dotted_squares(input_folder: str, output_folder: str, config: Config = Config()) -> None:
@@ -97,7 +133,7 @@ def batch_crop_dotted_squares(input_folder: str, output_folder: str, config: Con
 
 def main():
     """Main entry point for the script."""
-    config = Config()
+    config = Config(debug=True)
     batch_crop_dotted_squares(config.input_folder, config.output_folder, config)
 
 
