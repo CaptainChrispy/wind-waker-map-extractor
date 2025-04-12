@@ -25,12 +25,42 @@ class Config:
     height_max: int = 330
     target_width: int = 319
 
+    # Template matching settings
+    template_path: str = "ref.png"
+    match_threshold: float = 0.3
+
     # Output image settings
     border_padding: int = 5
 
     # Debug settings
     debug: bool = False
     debug_folder: str = "debug_output"
+
+
+def find_square_template(image: np.ndarray, config: Config) -> tuple:
+    """
+    Backup method using template matching to find the square.
+    
+    Args:
+        image: Input image
+        config: Configuration object
+    
+    Returns:
+        tuple: (x, y, w, h) if square found, None otherwise
+    """
+    template = cv2.imread(config.template_path)
+    if template is None:
+        print(f"Warning: Could not load template from {config.template_path}")
+        return None
+        
+    result = cv2.matchTemplate(image, template, cv2.TM_CCOEFF_NORMED)
+    _, max_val, _, max_loc = cv2.minMaxLoc(result)
+    
+    if max_val >= config.match_threshold:
+        x, y = max_loc
+        h, w = template.shape[:2]
+        return (x, y, w, h)
+    return None
 
 
 def crop_dotted_square(image_path: str, output_path: str, config: Config = Config()) -> None:
@@ -76,8 +106,16 @@ def crop_dotted_square(image_path: str, output_path: str, config: Config = Confi
         print(f'Cropped and saved to {output_path}')
     else:
         print(f"No suitable square found in {image_path}")
+        print("Primary detection failed, trying template matching...")
         if config.debug:
             save_debug_images(image_path, image, gray, edges, contours, config)
+
+        best_square = find_square_template(image, config)
+        if best_square:
+            print("Template matching succeeded!")
+        else:
+            print("Template matching failed. No square found.")
+            return
 
 
 def save_debug_images(image_path: str, image: np.ndarray, gray: np.ndarray, edges: np.ndarray, contours: list, config: Config) -> None:
