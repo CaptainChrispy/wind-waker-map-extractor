@@ -47,7 +47,7 @@ def crop_dotted_square(image_path: str, output_path: str, config: Config = Confi
     image = cv2.imread(image_path)
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) # Convert to grayscale for easier processing
     edges = cv2.Canny(gray, config.canny_threshold1, config.canny_threshold2)
-    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
     # Look for the most square-like, medium-sized polygon
     best_square = None
