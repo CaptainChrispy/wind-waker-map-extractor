@@ -26,7 +26,7 @@ class Config:
     target_width: int = 319
 
     # Template matching settings
-    template_path: str = "ref.png"
+    template_path: str = "templates/ref.png"
     match_threshold: float = 0.23
 
     # Output image settings
